@@ -58,6 +58,7 @@ class PhotoBoxScreen extends StatefulWidget {
 class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     with TickerProviderStateMixin {
   CameraController? _cameraController;
+  CameraDescription? _selectedCamera;
   List<File?> _capturedImages = [null, null, null, null]; // Store 4 photos
   List<Uint8List?> _processedImages = [
     null,
@@ -107,7 +108,10 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     super.initState();
     _initializeAnimations();
     _requestPermissions();
-    _initializeCamera();
+    if (widget.cameras.isNotEmpty) {
+      _selectedCamera = widget.cameras.first;
+      _initializeCamera();
+    }
     _selectedBackground = _backgroundAssets.first;
   }
 
@@ -172,9 +176,9 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
   }
 
   Future<void> _initializeCamera() async {
-    if (widget.cameras.isNotEmpty) {
+    if (_selectedCamera != null) {
       _cameraController = CameraController(
-        widget.cameras.first,
+        _selectedCamera!,
         ResolutionPreset.high,
       );
 
@@ -184,6 +188,52 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
       } catch (e) {
         print('Fehler beim Initialisieren der Kamera: $e');
       }
+    }
+  }
+
+  Future<void> _onCameraSelected(CameraDescription camera) async {
+    if (_selectedCamera == camera) return;
+
+    setState(() {
+      _selectedCamera = camera;
+      _isLoading = true;
+      _status = 'Kamera wird gewechselt...';
+    });
+
+    // Dispose current controller
+    await _cameraController?.dispose();
+    _cameraController = null;
+
+    // Initialize new camera
+    await _initializeCamera();
+
+    setState(() {
+      _isLoading = false;
+      _status = 'Bereit für Foto-Serie';
+    });
+  }
+
+  // Helper method to get camera lens icon
+  IconData _getCameraLensIcon(CameraLensDirection direction) {
+    switch (direction) {
+      case CameraLensDirection.back:
+        return Icons.camera_rear;
+      case CameraLensDirection.front:
+        return Icons.camera_front;
+      case CameraLensDirection.external:
+        return Icons.camera;
+    }
+  }
+
+  // Helper method to get camera display name
+  String _getCameraDisplayName(CameraDescription camera) {
+    switch (camera.lensDirection) {
+      case CameraLensDirection.back:
+        return 'Rückkamera';
+      case CameraLensDirection.front:
+        return 'Frontkamera';
+      case CameraLensDirection.external:
+        return 'Externe Kamera';
     }
   }
 
@@ -326,7 +376,7 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     _countdownTimer?.cancel();
     _photoTimer?.cancel();
 
-    // Reset animations
+    // Reset animations but keep camera selection
     _transitionAnimationController.reset();
     _cameraAnimationController.forward();
   }
@@ -719,6 +769,82 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                 child: _buildCameraPreview(),
               ),
 
+              // Camera selection dropdown (always show for debugging)
+              if (widget.cameras.isNotEmpty)
+                Positioned(
+                  left: 20,
+                  top: 20,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: DropdownButton<CameraDescription>(
+                      value: _selectedCamera,
+                      dropdownColor: Colors.grey[900],
+                      underline: Container(),
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.white,
+                      ),
+                      items: widget.cameras.map((camera) {
+                        return DropdownMenuItem<CameraDescription>(
+                          value: camera,
+                          child: Row(
+                            children: [
+                              Icon(
+                                _getCameraLensIcon(camera.lensDirection),
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _getCameraDisplayName(camera),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (camera) {
+                        if (camera != null &&
+                            !_isCountdownActive &&
+                            !_isLoading) {
+                          _onCameraSelected(camera);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+
+              // Debug info panel (can be removed later)
+              Positioned(
+                left: 20,
+                top: 80,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Kameras gefunden: ${widget.cameras.length}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+
               // 4 photo slots on the right
               Positioned(
                 right: 20,
@@ -825,7 +951,9 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
               // Status overlay
               if (_status != 'Bereit für Foto-Serie')
                 Positioned(
-                  top: 50,
+                  top: widget.cameras.isNotEmpty
+                      ? 120
+                      : 50, // Adjust based on dropdown and debug info presence
                   left: 50,
                   right: 220,
                   child: Container(
