@@ -76,6 +76,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
   bool _isLoading = false;
   bool _isSaving = false;
   String _status = 'Bereit für Foto-Serie';
+  bool _removeBackground = false; // Toggle for background removal
+  bool _showOriginal = false; // Toggle between original and processed images
 
   // Timer and photo sequence state
   bool _isCountdownActive = false;
@@ -311,18 +313,27 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
         });
         _startCountdown();
       } else {
-        // All photos taken, start processing
+        // All photos taken
         setState(() {
           _isCountdownActive = false;
-          _status = 'Alle 4 Fotos aufgenommen! Hintergründe werden entfernt...';
           _showBackgroundSelection = true;
         });
 
         // Start transition animation
         await _transitionAnimationController.forward();
 
-        // Process all images
-        await _processAllImages();
+        // Only process images if background removal is enabled
+        if (_removeBackground) {
+          setState(() {
+            _status =
+                'Alle 4 Fotos aufgenommen! Hintergründe werden entfernt...';
+          });
+          await _processAllImages();
+        } else {
+          setState(() {
+            _status = 'Alle 4 Fotos aufgenommen! Bereit zum Speichern.';
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -370,6 +381,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
       _isLoading = false;
       _isCountdownActive = false;
       _currentPhotoIndex = 0;
+      _removeBackground = false;
+      _showOriginal = false;
     });
 
     // Cancel any active timers
@@ -638,13 +651,63 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     });
   }
 
+  // Method to toggle background removal and process images if needed
+  Future<void> _toggleBackgroundRemoval(bool enabled) async {
+    setState(() {
+      _removeBackground = enabled;
+    });
+
+    if (enabled && _capturedImages.any((img) => img != null)) {
+      // If enabling background removal and we have captured images, process them
+      if (_backgroundRemovedImages.every((img) => img == null)) {
+        // Only process if not already processed
+        setState(() {
+          _status = 'Hintergründe werden entfernt...';
+        });
+        await _processAllImages();
+      } else {
+        // Already processed, just update status
+        setState(() {
+          _status =
+              'Hintergründe bereits entfernt! Wählen Sie einen Hintergrund.';
+        });
+      }
+    } else if (!enabled) {
+      setState(() {
+        _status = 'Original-Fotos werden angezeigt.';
+      });
+    }
+  }
+
   // Add this method to save all processed images
   Future<void> _saveAllProcessedImages() async {
-    bool hasAnyProcessedImage = _processedImages.any((image) => image != null);
+    // Determine which images to save based on current mode
+    List<Uint8List?> imagesToSave;
+    String imageType;
+    
+    if (_removeBackground && !_showOriginal) {
+      // Save processed images with background replacement
+      imagesToSave = _processedImages;
+      imageType = 'processed';
+    } else if (_removeBackground && _showOriginal) {
+      // Save original images even though background removal is enabled
+      imagesToSave = _capturedImages
+          .map((file) => file?.readAsBytesSync())
+          .toList();
+      imageType = 'original';
+    } else {
+      // Save original images
+      imagesToSave = _capturedImages
+          .map((file) => file?.readAsBytesSync())
+          .toList();
+      imageType = 'original';
+    }
 
-    if (!hasAnyProcessedImage) {
+    bool hasAnyImage = imagesToSave.any((image) => image != null);
+
+    if (!hasAnyImage) {
       setState(() {
-        _status = 'Keine verarbeiteten Bilder zum Speichern verfügbar.';
+        _status = 'Keine Bilder zum Speichern verfügbar.';
       });
       return;
     }
@@ -681,23 +744,24 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
         int savedCount = 0;
 
         for (int i = 0; i < 4; i++) {
-          if (_processedImages[i] != null) {
-            final fileName = 'photobox_${timestamp}_${i + 1}.png';
+          if (imagesToSave[i] != null) {
+            final fileName = 'photobox_${imageType}_${timestamp}_${i + 1}.png';
             final filePath = '${photoBoxDir.path}/$fileName';
             final file = File(filePath);
-            await file.writeAsBytes(_processedImages[i]!);
+            await file.writeAsBytes(imagesToSave[i]!);
             savedCount++;
           }
         }
 
         setState(() {
-          _status = '$savedCount Bilder erfolgreich gespeichert!';
+          _status =
+              '$savedCount ${imageType == 'processed' ? 'verarbeitete' : 'Original'}-Bilder erfolgreich gespeichert!';
           _isSaving = false;
         });
 
         // Show success dialog
         if (mounted) {
-          _showSaveSuccessDialog(photoBoxDir.path, savedCount);
+          _showSaveSuccessDialog(photoBoxDir.path, savedCount, imageType);
         }
       } else {
         throw Exception('Speicherordner konnte nicht gefunden werden');
@@ -711,7 +775,12 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
   }
 
   // Update this method to show success dialog for multiple images
-  void _showSaveSuccessDialog(String folderPath, int savedCount) {
+  void _showSaveSuccessDialog(
+    String folderPath,
+    int savedCount, [
+    String? imageType,
+  ]) {
+    String imageTypeText = imageType == 'processed' ? 'verarbeitete ' : '';
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -722,7 +791,7 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
             style: TextStyle(color: Colors.white),
           ),
           content: Text(
-            '$savedCount Bilder wurden gespeichert unter:\n$folderPath',
+            '$savedCount ${imageTypeText}Bilder wurden gespeichert unter:\n$folderPath',
             style: const TextStyle(color: Colors.white70),
           ),
           actions: [
@@ -828,10 +897,70 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                   ),
                 ),
 
-              // Debug info panel (can be removed later)
+              // Background removal toggle
               Positioned(
                 left: 20,
                 top: 80,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.auto_fix_high,
+                        color: _removeBackground
+                            ? Colors.green
+                            : Colors.white54,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Hintergrund entfernen',
+                        style: TextStyle(
+                          color: _removeBackground
+                              ? Colors.green
+                              : Colors.white,
+                          fontSize: 14,
+                          fontWeight: _removeBackground
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Switch(
+                        value: _removeBackground,
+                        onChanged: !_isCountdownActive && !_isLoading
+                            ? (value) {
+                                setState(() {
+                                  _removeBackground = value;
+                                });
+                              }
+                            : null,
+                        activeColor: Colors.green,
+                        activeTrackColor: Colors.green.withOpacity(0.3),
+                        inactiveThumbColor: Colors.white54,
+                        inactiveTrackColor: Colors.white.withOpacity(0.2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Debug info panel (can be removed later)
+              Positioned(
+                left: 20,
+                top: 140,
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -952,8 +1081,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
               if (_status != 'Bereit für Foto-Serie')
                 Positioned(
                   top: widget.cameras.isNotEmpty
-                      ? 120
-                      : 50, // Adjust based on dropdown and debug info presence
+                      ? 180
+                      : 50, // Adjust based on dropdown, toggle, and debug info presence
                   left: 50,
                   right: 220,
                   child: Container(
@@ -1128,6 +1257,111 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                             ],
                           ),
 
+                          const SizedBox(height: 16),
+
+                          // Background removal toggle and view controls
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.1),
+                                width: 1,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Background removal toggle
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.auto_fix_high,
+                                      color: _removeBackground
+                                          ? Colors.green
+                                          : Colors.white54,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Hintergrund entfernen',
+                                        style: TextStyle(
+                                          color: _removeBackground
+                                              ? Colors.green
+                                              : Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: _removeBackground
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: _removeBackground,
+                                      onChanged: !_isLoading
+                                          ? (value) =>
+                                                _toggleBackgroundRemoval(value)
+                                          : null,
+                                      activeColor: Colors.green,
+                                      activeTrackColor: Colors.green
+                                          .withOpacity(0.3),
+                                      inactiveThumbColor: Colors.white54,
+                                      inactiveTrackColor: Colors.white
+                                          .withOpacity(0.2),
+                                    ),
+                                  ],
+                                ),
+
+                                // Show original/processed toggle only if background removal is enabled and processed
+                                if (_removeBackground &&
+                                    _backgroundRemovedImages.any(
+                                      (img) => img != null,
+                                    )) ...[
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        _showOriginal
+                                            ? Icons.photo
+                                            : Icons.layers,
+                                        color: Colors.blue,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _showOriginal
+                                              ? 'Original anzeigen'
+                                              : 'Verarbeitet anzeigen',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: _showOriginal,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _showOriginal = value;
+                                          });
+                                        },
+                                        activeColor: Colors.blue,
+                                        activeTrackColor: Colors.blue
+                                            .withOpacity(0.3),
+                                        inactiveThumbColor: Colors.white54,
+                                        inactiveTrackColor: Colors.white
+                                            .withOpacity(0.2),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
                           const SizedBox(height: 24),
 
                           // Captured image
@@ -1154,35 +1388,65 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                       ),
                                   itemCount: 4,
                                   itemBuilder: (context, index) {
+                                    // Determine which image to show based on current mode
+                                    Widget imageWidget;
+                                    Color borderColor;
+
+                                    if (_removeBackground &&
+                                        !_showOriginal &&
+                                        _processedImages[index] != null) {
+                                      // Show processed image with background
+                                      imageWidget = Image.memory(
+                                        _processedImages[index]!,
+                                        fit: BoxFit.cover,
+                                      );
+                                      borderColor = Colors.blue;
+                                    } else if (_removeBackground &&
+                                        _showOriginal &&
+                                        _capturedImages[index] != null) {
+                                      // Show original image even though background removal is enabled
+                                      imageWidget = Image.file(
+                                        _capturedImages[index]!,
+                                        fit: BoxFit.cover,
+                                      );
+                                      borderColor = Colors.orange;
+                                    } else if (_capturedImages[index] != null) {
+                                      // Show original image (background removal disabled or no processed image)
+                                      imageWidget = Image.file(
+                                        _capturedImages[index]!,
+                                        fit: BoxFit.cover,
+                                      );
+                                      borderColor = Colors.green;
+                                    } else {
+                                      // No image available
+                                      imageWidget = Container(
+                                        color: Colors.grey[800],
+                                        child: Center(
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: const TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 24,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                      borderColor = Colors.white.withOpacity(
+                                        0.3,
+                                      );
+                                    }
+
                                     return Container(
                                       decoration: BoxDecoration(
                                         border: Border.all(
-                                          color: _capturedImages[index] != null
-                                              ? Colors.green
-                                              : Colors.white.withOpacity(0.3),
+                                          color: borderColor,
                                           width: 1,
                                         ),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(7),
-                                        child: _capturedImages[index] != null
-                                            ? Image.file(
-                                                _capturedImages[index]!,
-                                                fit: BoxFit.cover,
-                                              )
-                                            : Container(
-                                                color: Colors.grey[800],
-                                                child: Center(
-                                                  child: Text(
-                                                    '${index + 1}',
-                                                    style: const TextStyle(
-                                                      color: Colors.white54,
-                                                      fontSize: 24,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
+                                        child: imageWidget,
                                       ),
                                     );
                                   },
@@ -1203,7 +1467,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // Background Selection
-                          if (_backgroundRemovedImages.any(
+                          if (_removeBackground &&
+                              _backgroundRemovedImages.any(
                             (img) => img != null,
                           )) ...[
                             Container(
@@ -1311,7 +1576,9 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                           ],
 
                           // Processed Image Result
-                          if (_processedImages.any((img) => img != null)) ...[
+                          if (_removeBackground &&
+                              !_showOriginal &&
+                              _processedImages.any((img) => img != null)) ...[
                             Expanded(
                               child: Container(
                                 padding: const EdgeInsets.all(20),
@@ -1459,6 +1726,70 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                     ),
                                   ],
                                 ),
+                              ),
+                            ),
+                          ],
+
+                          // Save button for original images (when background removal is disabled or showing originals)
+                          if ((!_removeBackground || _showOriginal) &&
+                              _capturedImages.any((img) => img != null)) ...[
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.1),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _showOriginal
+                                        ? 'Original-Fotos'
+                                        : 'Aufgenommene Fotos',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: _isSaving
+                                        ? null
+                                        : _saveAllProcessedImages,
+                                    icon: _isSaving
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                            ),
+                                          )
+                                        : const Icon(Icons.save, size: 18),
+                                    label: Text(
+                                      _isSaving ? 'Speichern...' : 'Speichern',
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
