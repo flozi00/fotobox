@@ -78,6 +78,7 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
   String _status = 'Bereit für Foto-Serie';
   bool _removeBackground = false; // Toggle for background removal
   bool _showOriginal = false; // Toggle between original and processed images
+  bool _saveSeparately = true; // Toggle for saving images separately or as 4-tile image
 
   // Timer and photo sequence state
   bool _isCountdownActive = false;
@@ -383,6 +384,7 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
       _currentPhotoIndex = 0;
       _removeBackground = false;
       _showOriginal = false;
+      // Keep _saveSeparately as user preference - don't reset
     });
 
     // Cancel any active timers
@@ -679,39 +681,201 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     }
   }
 
-  // Add this method to save all processed images
-  Future<void> _saveAllProcessedImages() async {
-    // Determine which images to save based on current mode
-    List<Uint8List?> imagesToSave;
-    String imageType;
+  // Add this method to create a 4-tile combined image
+  Future<Uint8List?> _createFourTileImage() async {
+    // Determine which images to use based on current mode
+    List<Uint8List?> imagesToCombine;
     
     if (_removeBackground && !_showOriginal) {
-      // Save processed images with background replacement
-      imagesToSave = _processedImages;
-      imageType = 'processed';
+      // Use processed images with background replacement
+      imagesToCombine = _processedImages;
     } else if (_removeBackground && _showOriginal) {
-      // Save original images even though background removal is enabled
-      imagesToSave = _capturedImages
+      // Use original images even though background removal is enabled
+      imagesToCombine = _capturedImages
           .map((file) => file?.readAsBytesSync())
           .toList();
-      imageType = 'original';
     } else {
-      // Save original images
-      imagesToSave = _capturedImages
+      // Use original images
+      imagesToCombine = _capturedImages
           .map((file) => file?.readAsBytesSync())
           .toList();
-      imageType = 'original';
     }
 
-    bool hasAnyImage = imagesToSave.any((image) => image != null);
+    // Check if we have any images
+    bool hasAnyImage = imagesToCombine.any((image) => image != null);
+    if (!hasAnyImage) return null;
 
-    if (!hasAnyImage) {
-      setState(() {
-        _status = 'Keine Bilder zum Speichern verfügbar.';
-      });
-      return;
+    try {
+      // Define dimensions for the combined image - much higher resolution
+      const int tileWidth = 800;  // Doubled resolution
+      const int tileHeight = 600; // Doubled resolution
+      const int spacing = 20;     // Increased spacing for better visibility
+      const int finalWidth = (tileWidth * 2) + (spacing * 3); // 2 columns + 3 spacings
+      const int finalHeight = (tileHeight * 2) + (spacing * 3); // 2 rows + 3 spacings
+
+      // Create a new image with white background
+      final combinedImage = img.Image(
+        width: finalWidth,
+        height: finalHeight,
+      );
+      
+      // Fill with white background
+      img.fill(combinedImage, color: img.ColorRgb8(255, 255, 255));
+
+      // Process each image and place it in the grid
+      for (int i = 0; i < 4; i++) {
+        if (imagesToCombine[i] != null) {
+          // Decode the image
+          img.Image? decodedImage;
+          if (_removeBackground && !_showOriginal && _processedImages[i] != null) {
+            decodedImage = img.decodePng(imagesToCombine[i]!);
+          } else {
+            decodedImage = img.decodeImage(imagesToCombine[i]!);
+          }
+
+          if (decodedImage != null) {
+            // Resize image to fit tile dimensions while maintaining aspect ratio and high quality
+            final resizedImage = img.copyResize(
+              decodedImage,
+              width: tileWidth,
+              height: tileHeight,
+              interpolation: img.Interpolation.cubic, // Better quality interpolation
+            );
+
+            // Calculate position in grid (2x2 layout)
+            final row = i ~/ 2;
+            final col = i % 2;
+            final x = spacing + (col * (tileWidth + spacing));
+            final y = spacing + (row * (tileHeight + spacing));
+
+            // Composite the resized image onto the combined image
+            img.compositeImage(combinedImage, resizedImage, dstX: x, dstY: y);
+          }
+        } else {
+          // Create placeholder for missing image
+          final row = i ~/ 2;
+          final col = i % 2;
+          final x = spacing + (col * (tileWidth + spacing));
+          final y = spacing + (row * (tileHeight + spacing));
+
+          // Create a gray placeholder
+          final placeholder = img.Image(width: tileWidth, height: tileHeight);
+          img.fill(placeholder, color: img.ColorRgb8(200, 200, 200));
+          
+          // Add "No Image" text effect by drawing a simple border
+          img.drawRect(
+            placeholder,
+            x1: 10,
+            y1: 10,
+            x2: tileWidth - 10,
+            y2: tileHeight - 10,
+            color: img.ColorRgb8(150, 150, 150),
+            thickness: 2,
+          );
+
+          img.compositeImage(combinedImage, placeholder, dstX: x, dstY: y);
+        }
+      }
+
+      // Encode as PNG
+      return Uint8List.fromList(img.encodePng(combinedImage));
+    } catch (e) {
+      print('Error creating 4-tile image: $e');
+      return null;
+    }
+  }
+
+  // Add this method to create a preview version of the 4-tile image
+  Future<Uint8List?> _createFourTilePreview() async {
+    // Same logic as _createFourTileImage but with smaller dimensions for preview
+    List<Uint8List?> imagesToCombine;
+    
+    if (_removeBackground && !_showOriginal) {
+      imagesToCombine = _processedImages;
+    } else if (_removeBackground && _showOriginal) {
+      imagesToCombine = _capturedImages
+          .map((file) => file?.readAsBytesSync())
+          .toList();
+    } else {
+      imagesToCombine = _capturedImages
+          .map((file) => file?.readAsBytesSync())
+          .toList();
     }
 
+    bool hasAnyImage = imagesToCombine.any((image) => image != null);
+    if (!hasAnyImage) return null;
+
+    try {
+      // Smaller dimensions for preview
+      const int tileWidth = 200;
+      const int tileHeight = 150;
+      const int spacing = 5;
+      const int finalWidth = (tileWidth * 2) + (spacing * 3);
+      const int finalHeight = (tileHeight * 2) + (spacing * 3);
+
+      final combinedImage = img.Image(
+        width: finalWidth,
+        height: finalHeight,
+      );
+      
+      img.fill(combinedImage, color: img.ColorRgb8(255, 255, 255));
+
+      for (int i = 0; i < 4; i++) {
+        if (imagesToCombine[i] != null) {
+          img.Image? decodedImage;
+          if (_removeBackground && !_showOriginal && _processedImages[i] != null) {
+            decodedImage = img.decodePng(imagesToCombine[i]!);
+          } else {
+            decodedImage = img.decodeImage(imagesToCombine[i]!);
+          }
+
+          if (decodedImage != null) {
+            final resizedImage = img.copyResize(
+              decodedImage,
+              width: tileWidth,
+              height: tileHeight,
+              interpolation: img.Interpolation.cubic,
+            );
+
+            final row = i ~/ 2;
+            final col = i % 2;
+            final x = spacing + (col * (tileWidth + spacing));
+            final y = spacing + (row * (tileHeight + spacing));
+
+            img.compositeImage(combinedImage, resizedImage, dstX: x, dstY: y);
+          }
+        } else {
+          final row = i ~/ 2;
+          final col = i % 2;
+          final x = spacing + (col * (tileWidth + spacing));
+          final y = spacing + (row * (tileHeight + spacing));
+
+          final placeholder = img.Image(width: tileWidth, height: tileHeight);
+          img.fill(placeholder, color: img.ColorRgb8(200, 200, 200));
+          
+          img.drawRect(
+            placeholder,
+            x1: 5,
+            y1: 5,
+            x2: tileWidth - 5,
+            y2: tileHeight - 5,
+            color: img.ColorRgb8(150, 150, 150),
+            thickness: 1,
+          );
+
+          img.compositeImage(combinedImage, placeholder, dstX: x, dstY: y);
+        }
+      }
+
+      return Uint8List.fromList(img.encodePng(combinedImage));
+    } catch (e) {
+      print('Error creating 4-tile preview: $e');
+      return null;
+    }
+  }
+
+  // Add this method to save all processed images
+  Future<void> _saveAllProcessedImages() async {
     setState(() {
       _isSaving = true;
       _status = 'Bilder werden gespeichert...';
@@ -743,25 +907,87 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         int savedCount = 0;
 
-        for (int i = 0; i < 4; i++) {
-          if (imagesToSave[i] != null) {
-            final fileName = 'photobox_${imageType}_${timestamp}_${i + 1}.png';
+        if (_saveSeparately) {
+          // Save images separately as before
+          // Determine which images to save based on current mode
+          List<Uint8List?> imagesToSave;
+          String imageType;
+          
+          if (_removeBackground && !_showOriginal) {
+            // Save processed images with background replacement
+            imagesToSave = _processedImages;
+            imageType = 'processed';
+          } else if (_removeBackground && _showOriginal) {
+            // Save original images even though background removal is enabled
+            imagesToSave = _capturedImages
+                .map((file) => file?.readAsBytesSync())
+                .toList();
+            imageType = 'original';
+          } else {
+            // Save original images
+            imagesToSave = _capturedImages
+                .map((file) => file?.readAsBytesSync())
+                .toList();
+            imageType = 'original';
+          }
+
+          bool hasAnyImage = imagesToSave.any((image) => image != null);
+
+          if (!hasAnyImage) {
+            setState(() {
+              _status = 'Keine Bilder zum Speichern verfügbar.';
+              _isSaving = false;
+            });
+            return;
+          }
+
+          for (int i = 0; i < 4; i++) {
+            if (imagesToSave[i] != null) {
+              final fileName = 'photobox_${imageType}_${timestamp}_${i + 1}.png';
+              final filePath = '${photoBoxDir.path}/$fileName';
+              final file = File(filePath);
+              await file.writeAsBytes(imagesToSave[i]!);
+              savedCount++;
+            }
+          }
+
+          setState(() {
+            _status =
+                '$savedCount ${imageType == 'processed' ? 'verarbeitete' : 'Original'}-Bilder erfolgreich gespeichert!';
+            _isSaving = false;
+          });
+
+          // Show success dialog
+          if (mounted) {
+            _showSaveSuccessDialog(photoBoxDir.path, savedCount, imageType);
+          }
+        } else {
+          // Save as 4-tile combined image
+          final combinedImage = await _createFourTileImage();
+          
+          if (combinedImage != null) {
+            String imageType = _removeBackground && !_showOriginal ? 'processed' : 'original';
+            final fileName = 'photobox_4tile_${imageType}_$timestamp.png';
             final filePath = '${photoBoxDir.path}/$fileName';
             final file = File(filePath);
-            await file.writeAsBytes(imagesToSave[i]!);
-            savedCount++;
+            await file.writeAsBytes(combinedImage);
+            savedCount = 1;
+
+            setState(() {
+              _status = '4-Kachel ${imageType == 'processed' ? 'verarbeitetes' : 'Original'}-Bild erfolgreich gespeichert!';
+              _isSaving = false;
+            });
+
+            // Show success dialog for combined image
+            if (mounted) {
+              _showSaveSuccessDialog(photoBoxDir.path, savedCount, '4-tile_$imageType');
+            }
+          } else {
+            setState(() {
+              _status = 'Fehler beim Erstellen des 4-Kachel-Bildes.';
+              _isSaving = false;
+            });
           }
-        }
-
-        setState(() {
-          _status =
-              '$savedCount ${imageType == 'processed' ? 'verarbeitete' : 'Original'}-Bilder erfolgreich gespeichert!';
-          _isSaving = false;
-        });
-
-        // Show success dialog
-        if (mounted) {
-          _showSaveSuccessDialog(photoBoxDir.path, savedCount, imageType);
         }
       } else {
         throw Exception('Speicherordner konnte nicht gefunden werden');
@@ -780,7 +1006,17 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     int savedCount, [
     String? imageType,
   ]) {
-    String imageTypeText = imageType == 'processed' ? 'verarbeitete ' : '';
+    String imageTypeText = '';
+    String countText = '';
+    
+    if (imageType?.startsWith('4-tile_') == true) {
+      imageTypeText = imageType!.contains('processed') ? 'verarbeitetes ' : '';
+      countText = '1 ${imageTypeText}4-Kachel-Bild wurde';
+    } else {
+      imageTypeText = imageType == 'processed' ? 'verarbeitete ' : '';
+      countText = '$savedCount ${imageTypeText}Bilder wurden';
+    }
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -791,7 +1027,7 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
             style: TextStyle(color: Colors.white),
           ),
           content: Text(
-            '$savedCount ${imageTypeText}Bilder wurden gespeichert unter:\n$folderPath',
+            '$countText gespeichert unter:\n$folderPath',
             style: const TextStyle(color: Colors.white70),
           ),
           actions: [
@@ -802,6 +1038,142 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
           ],
         );
       },
+    );
+  }
+
+  // Helper method to build separate images preview
+  Widget _buildSeparateImagesPreview() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 4,
+            mainAxisSpacing: 4,
+          ),
+          itemCount: 4,
+          itemBuilder: (context, index) {
+            return Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _processedImages[index] != null
+                      ? Colors.green
+                      : Colors.white.withOpacity(0.3),
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: _processedImages[index] != null
+                    ? Image.memory(
+                        _processedImages[index]!,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        color: Colors.grey[800],
+                        child: Center(
+                          child: Text(
+                            '${index + 1}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // Helper method to build tiled image preview
+  Widget _buildTiledImagePreview() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: FutureBuilder<Uint8List?>(
+          future: _createFourTilePreview(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Container(
+                color: Colors.grey[800],
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white54),
+                      SizedBox(height: 8),
+                      Text(
+                        '4-Kachel Vorschau wird erstellt...',
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            } else if (snapshot.hasData && snapshot.data != null) {
+              return Image.memory(
+                snapshot.data!,
+                fit: BoxFit.contain,
+              );
+            } else {
+              return Container(
+                color: Colors.grey[800],
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.grid_view,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '4-Kachel Vorschau\nnicht verfügbar',
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          },
+        ),
+      ),
     );
   }
 
@@ -897,70 +1269,13 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                   ),
                 ),
 
-              // Background removal toggle
-              Positioned(
-                left: 20,
-                top: 80,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.auto_fix_high,
-                        color: _removeBackground
-                            ? Colors.green
-                            : Colors.white54,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Hintergrund entfernen',
-                        style: TextStyle(
-                          color: _removeBackground
-                              ? Colors.green
-                              : Colors.white,
-                          fontSize: 14,
-                          fontWeight: _removeBackground
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Switch(
-                        value: _removeBackground,
-                        onChanged: !_isCountdownActive && !_isLoading
-                            ? (value) {
-                                setState(() {
-                                  _removeBackground = value;
-                                });
-                              }
-                            : null,
-                        activeColor: Colors.green,
-                        activeTrackColor: Colors.green.withOpacity(0.3),
-                        inactiveThumbColor: Colors.white54,
-                        inactiveTrackColor: Colors.white.withOpacity(0.2),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              // Background removal toggle - Hidden during picture taking, only shown after completion
+              // This toggle will only be visible in the background selection view
 
               // Debug info panel (can be removed later)
               Positioned(
                 left: 20,
-                top: 140,
+                top: 80,
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -1081,8 +1396,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
               if (_status != 'Bereit für Foto-Serie')
                 Positioned(
                   top: widget.cameras.isNotEmpty
-                      ? 180
-                      : 50, // Adjust based on dropdown, toggle, and debug info presence
+                      ? 120
+                      : 50, // Adjust based on dropdown and debug info presence
                   left: 50,
                   right: 220,
                   child: Container(
@@ -1310,6 +1625,48 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                       inactiveThumbColor: Colors.white54,
                                       inactiveTrackColor: Colors.white
                                           .withOpacity(0.2),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                // Save mode toggle
+                                Row(
+                                  children: [
+                                    Icon(
+                                      _saveSeparately ? Icons.view_module : Icons.grid_view,
+                                      color: _saveSeparately
+                                          ? Colors.orange
+                                          : Colors.purple,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _saveSeparately ? 'Einzeln speichern' : '4-Kachel Bild',
+                                        style: TextStyle(
+                                          color: _saveSeparately
+                                              ? Colors.orange
+                                              : Colors.purple,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: !_saveSeparately,
+                                      onChanged: !_isLoading
+                                          ? (value) {
+                                              setState(() {
+                                                _saveSeparately = !value;
+                                              });
+                                            }
+                                          : null,
+                                      activeColor: Colors.purple,
+                                      activeTrackColor: Colors.purple.withOpacity(0.3),
+                                      inactiveThumbColor: Colors.orange,
+                                      inactiveTrackColor: Colors.orange.withOpacity(0.3),
                                     ),
                                   ],
                                 ),
@@ -1623,14 +1980,13 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                                         >(Colors.white),
                                                   ),
                                                 )
-                                              : const Icon(
-                                                  Icons.save,
-                                                  size: 18,
-                                                ),
+                                              : Icon(_saveSeparately ? Icons.save : Icons.grid_view, size: 18),
                                           label: Text(
-                                            _isSaving
-                                                ? 'Speichern...'
-                                                : 'Speichern',
+                                            _isSaving 
+                                                ? 'Speichern...' 
+                                                : _saveSeparately 
+                                                    ? 'Einzeln speichern' 
+                                                    : '4-Kachel speichern',
                                           ),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: Colors.green,
@@ -1648,79 +2004,103 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-                                    Expanded(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(
-                                                0.3,
-                                              ),
-                                              blurRadius: 8,
-                                              spreadRadius: 1,
-                                            ),
-                                          ],
+                                    
+                                    // Save mode toggle
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.1),
+                                          width: 1,
                                         ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            _saveSeparately ? Icons.view_module : Icons.grid_view,
+                                            color: _saveSeparately
+                                                ? Colors.orange
+                                                : Colors.purple,
+                                            size: 20,
                                           ),
-                                          child: GridView.builder(
-                                            gridDelegate:
-                                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                                  crossAxisCount: 2,
-                                                  crossAxisSpacing: 4,
-                                                  mainAxisSpacing: 4,
-                                                ),
-                                            itemCount: 4,
-                                            itemBuilder: (context, index) {
-                                              return Container(
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                    color:
-                                                        _processedImages[index] !=
-                                                            null
-                                                        ? Colors.green
-                                                        : Colors.white
-                                                              .withOpacity(0.3),
-                                                    width: 1,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(5),
-                                                  child:
-                                                      _processedImages[index] !=
-                                                          null
-                                                      ? Image.memory(
-                                                          _processedImages[index]!,
-                                                          fit: BoxFit.cover,
-                                                        )
-                                                      : Container(
-                                                          color:
-                                                              Colors.grey[800],
-                                                          child: Center(
-                                                            child: Text(
-                                                              '${index + 1}',
-                                                              style:
-                                                                  const TextStyle(
-                                                                    color: Colors
-                                                                        .white54,
-                                                                    fontSize:
-                                                                        16,
-                                                                  ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                ),
-                                              );
-                                            },
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _saveSeparately ? 'Einzeln speichern' : '4-Kachel Bild',
+                                              style: TextStyle(
+                                                color: _saveSeparately
+                                                    ? Colors.orange
+                                                    : Colors.purple,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                           ),
+                                          Switch(
+                                            value: !_saveSeparately,
+                                            onChanged: !_isLoading
+                                                ? (value) {
+                                                    setState(() {
+                                                      _saveSeparately = !value;
+                                                    });
+                                                  }
+                                                : null,
+                                            activeColor: Colors.purple,
+                                            activeTrackColor: Colors.purple.withOpacity(0.3),
+                                            inactiveThumbColor: Colors.orange,
+                                            inactiveTrackColor: Colors.orange.withOpacity(0.3),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    
+                                    // Preview area
+                                    Expanded(
+                                      child: _saveSeparately 
+                                          ? _buildSeparateImagesPreview()
+                                          : _buildTiledImagePreview(),
+                                    ),
+                                    
+                                    const SizedBox(height: 16),
+                                    
+                                    // Save button
+                                    ElevatedButton.icon(
+                                      onPressed: _isSaving
+                                          ? null
+                                          : _saveAllProcessedImages,
+                                      icon: _isSaving
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
+                                              ),
+                                            )
+                                          : Icon(_saveSeparately ? Icons.save : Icons.grid_view, size: 18),
+                                      label: Text(
+                                        _isSaving 
+                                            ? 'Speichern...' 
+                                            : _saveSeparately 
+                                                ? 'Einzeln speichern' 
+                                                : '4-Kachel speichern',
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                       ),
                                     ),
@@ -1743,9 +2123,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                   width: 1,
                                 ),
                               ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
                                     _showOriginal
@@ -1757,6 +2136,61 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
+                                  const SizedBox(height: 16),
+                                  
+                                  // Save mode toggle
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.05),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.1),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          _saveSeparately ? Icons.view_module : Icons.grid_view,
+                                          color: _saveSeparately
+                                              ? Colors.orange
+                                              : Colors.purple,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _saveSeparately ? 'Einzeln speichern' : '4-Kachel Bild',
+                                            style: TextStyle(
+                                              color: _saveSeparately
+                                                  ? Colors.orange
+                                                  : Colors.purple,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        Switch(
+                                          value: !_saveSeparately,
+                                          onChanged: !_isLoading
+                                              ? (value) {
+                                                  setState(() {
+                                                    _saveSeparately = !value;
+                                                  });
+                                                }
+                                              : null,
+                                          activeColor: Colors.purple,
+                                          activeTrackColor: Colors.purple.withOpacity(0.3),
+                                          inactiveThumbColor: Colors.orange,
+                                          inactiveTrackColor: Colors.orange.withOpacity(0.3),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  
+                                  // Save button
                                   ElevatedButton.icon(
                                     onPressed: _isSaving
                                         ? null
@@ -1773,16 +2207,20 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                                   ),
                                             ),
                                           )
-                                        : const Icon(Icons.save, size: 18),
+                                        : Icon(_saveSeparately ? Icons.save : Icons.grid_view, size: 18),
                                     label: Text(
-                                      _isSaving ? 'Speichern...' : 'Speichern',
+                                      _isSaving 
+                                          ? 'Speichern...' 
+                                          : _saveSeparately 
+                                              ? 'Einzeln speichern' 
+                                              : '4-Kachel speichern',
                                     ),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.blue,
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16,
-                                        vertical: 8,
+                                        vertical: 12,
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
