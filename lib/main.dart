@@ -40,16 +40,648 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: PhotoBoxScreen(cameras: cameras),
+      home: SettingsScreen(cameras: cameras),
       debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class SettingsScreen extends StatefulWidget {
+  final List<CameraDescription> cameras;
+
+  const SettingsScreen({super.key, required this.cameras});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  CameraDescription? _selectedCamera;
+  bool _removeBackground = false;
+  bool _saveSeparately = true;
+  String? _selectedBackground;
+
+  // Available background assets
+  final List<String> _backgroundAssets = [
+    'assets/backgrounds/background1.jpg',
+    'assets/backgrounds/background2.jpg',
+    'assets/backgrounds/background3.jpg',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.cameras.isNotEmpty) {
+      _selectedCamera = widget.cameras.first;
+    }
+    _selectedBackground = _backgroundAssets.first;
+  }
+
+  // Helper method to get camera lens icon
+  IconData _getCameraLensIcon(CameraLensDirection direction) {
+    switch (direction) {
+      case CameraLensDirection.back:
+        return Icons.camera_rear;
+      case CameraLensDirection.front:
+        return Icons.camera_front;
+      case CameraLensDirection.external:
+        return Icons.camera;
+    }
+  }
+
+  // Helper method to get camera display name
+  String _getCameraDisplayName(CameraDescription camera) {
+    switch (camera.lensDirection) {
+      case CameraLensDirection.back:
+        return 'Rückkamera';
+      case CameraLensDirection.front:
+        return 'Frontkamera';
+      case CameraLensDirection.external:
+        return 'Externe Kamera';
+    }
+  }
+
+  String _getBackgroundDisplayName(String asset) {
+    switch (asset) {
+      case 'assets/backgrounds/background1.jpg':
+        return 'Hintergrund 1';
+      case 'assets/backgrounds/background2.jpg':
+        return 'Hintergrund 2';
+      case 'assets/backgrounds/background3.jpg':
+        return 'Hintergrund 3';
+      default:
+        return 'Unbekannter Hintergrund';
+    }
+  }
+
+  void _startPhotoBox() {
+    if (_selectedCamera == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bitte wählen Sie eine Kamera aus'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => PhotoBoxScreen(
+          cameras: widget.cameras,
+          initialCamera: _selectedCamera!,
+          removeBackground: _removeBackground,
+          saveSeparately: _saveSeparately,
+          selectedBackground: _selectedBackground!,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Container(
+        padding: const EdgeInsets.all(40),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade600, Colors.blue.shade800],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings,
+                        size: 60,
+                        color: Colors.white,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'PhotoBox Admin Einstellungen',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Konfigurieren Sie die PhotoBox vor dem Start',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Settings Card
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Camera Selection
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Kamera auswählen',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            if (widget.cameras.isNotEmpty)
+                              DropdownButtonFormField<CameraDescription>(
+                                value: _selectedCamera,
+                                dropdownColor: Colors.grey[800],
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.white.withOpacity(0.1),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.blue,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                items: widget.cameras.map((camera) {
+                                  return DropdownMenuItem<CameraDescription>(
+                                    value: camera,
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          _getCameraLensIcon(
+                                            camera.lensDirection,
+                                          ),
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          _getCameraDisplayName(camera),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (camera) {
+                                  setState(() {
+                                    _selectedCamera = camera;
+                                  });
+                                },
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.red.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.error,
+                                      color: Colors.red,
+                                      size: 24,
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Keine Kameras gefunden',
+                                      style: TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Background Removal Toggle
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.auto_fix_high,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Hintergrund entfernen',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _removeBackground
+                                        ? 'Hintergrund wird automatisch entfernt und durch einen neuen ersetzt'
+                                        : 'Original-Fotos werden gespeichert ohne Bearbeitung',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Switch(
+                                  value: _removeBackground,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _removeBackground = value;
+                                    });
+                                  },
+                                  activeColor: Colors.blue,
+                                  activeTrackColor: Colors.blue.withOpacity(
+                                    0.3,
+                                  ),
+                                  inactiveThumbColor: Colors.grey,
+                                  inactiveTrackColor: Colors.grey.withOpacity(
+                                    0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Background Selection (only show if background removal is enabled)
+                      if (_removeBackground) ...[
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.1),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.wallpaper,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Standard-Hintergrund',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              DropdownButtonFormField<String>(
+                                value: _selectedBackground,
+                                dropdownColor: Colors.grey[800],
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.white.withOpacity(0.1),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.blue,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                items: _backgroundAssets.map((background) {
+                                  return DropdownMenuItem<String>(
+                                    value: background,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white.withOpacity(
+                                                0.3,
+                                              ),
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              5,
+                                            ),
+                                            child: Image.asset(
+                                              background,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Container(
+                                                      color: Colors.grey,
+                                                      child: const Icon(
+                                                        Icons.image,
+                                                        color: Colors.white,
+                                                        size: 16,
+                                                      ),
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          _getBackgroundDisplayName(background),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (background) {
+                                  setState(() {
+                                    _selectedBackground = background;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Save Mode Toggle
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.save_alt,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Speicher-Modus',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _saveSeparately
+                                        ? 'Bilder werden einzeln gespeichert (4 separate Dateien)'
+                                        : 'Bilder werden als 4-Kachel-Bild gespeichert (1 kombinierte Datei)',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Switch(
+                                  value: _saveSeparately,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _saveSeparately = value;
+                                    });
+                                  },
+                                  activeColor: Colors.blue,
+                                  activeTrackColor: Colors.blue.withOpacity(
+                                    0.3,
+                                  ),
+                                  inactiveThumbColor: Colors.grey,
+                                  inactiveTrackColor: Colors.grey.withOpacity(
+                                    0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Start Button
+                Container(
+                  height: 70,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green.shade600, Colors.green.shade800],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: _startPhotoBox,
+                      child: const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.play_arrow,
+                              size: 32,
+                              color: Colors.white,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'PhotoBox starten',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class PhotoBoxScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
+  final CameraDescription initialCamera;
+  final bool removeBackground;
+  final bool saveSeparately;
+  final String selectedBackground;
 
-  const PhotoBoxScreen({super.key, required this.cameras});
+  const PhotoBoxScreen({
+    super.key,
+    required this.cameras,
+    required this.initialCamera,
+    required this.removeBackground,
+    required this.saveSeparately,
+    required this.selectedBackground,
+  });
 
   @override
   State<PhotoBoxScreen> createState() => _PhotoBoxScreenState();
@@ -111,11 +743,14 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     super.initState();
     _initializeAnimations();
     _requestPermissions();
-    if (widget.cameras.isNotEmpty) {
-      _selectedCamera = widget.cameras.first;
-      _initializeCamera();
-    }
-    _selectedBackground = _backgroundAssets.first;
+    
+    // Use the settings from the admin screen
+    _selectedCamera = widget.initialCamera;
+    _removeBackground = widget.removeBackground;
+    _saveSeparately = widget.saveSeparately;
+    _selectedBackground = widget.selectedBackground;
+
+    _initializeCamera();
   }
 
   void _initializeAnimations() {
@@ -192,28 +827,6 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
         print('Fehler beim Initialisieren der Kamera: $e');
       }
     }
-  }
-
-  Future<void> _onCameraSelected(CameraDescription camera) async {
-    if (_selectedCamera == camera) return;
-
-    setState(() {
-      _selectedCamera = camera;
-      _isLoading = true;
-      _status = 'Kamera wird gewechselt...';
-    });
-
-    // Dispose current controller
-    await _cameraController?.dispose();
-    _cameraController = null;
-
-    // Initialize new camera
-    await _initializeCamera();
-
-    setState(() {
-      _isLoading = false;
-      _status = 'Bereit für Foto-Serie';
-    });
   }
 
   // Helper method to get camera lens icon
@@ -653,34 +1266,6 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
     });
   }
 
-  // Method to toggle background removal and process images if needed
-  Future<void> _toggleBackgroundRemoval(bool enabled) async {
-    setState(() {
-      _removeBackground = enabled;
-    });
-
-    if (enabled && _capturedImages.any((img) => img != null)) {
-      // If enabling background removal and we have captured images, process them
-      if (_backgroundRemovedImages.every((img) => img == null)) {
-        // Only process if not already processed
-        setState(() {
-          _status = 'Hintergründe werden entfernt...';
-        });
-        await _processAllImages();
-      } else {
-        // Already processed, just update status
-        setState(() {
-          _status =
-              'Hintergründe bereits entfernt! Wählen Sie einen Hintergrund.';
-        });
-      }
-    } else if (!enabled) {
-      setState(() {
-        _status = 'Original-Fotos werden angezeigt.';
-      });
-    }
-  }
-
   // Add this method to create a 4-tile combined image
   Future<Uint8List?> _createFourTileImage() async {
     // Determine which images to use based on current mode
@@ -707,8 +1292,8 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
 
     try {
       // Define dimensions for the combined image - much higher resolution
-      const int tileWidth = 800;  // Doubled resolution
-      const int tileHeight = 600; // Doubled resolution
+      const int tileWidth = 1600; // Doubled resolution
+      const int tileHeight = 1200; // Doubled resolution
       const int spacing = 20;     // Increased spacing for better visibility
       const int finalWidth = (tileWidth * 2) + (spacing * 3); // 2 columns + 3 spacings
       const int finalHeight = (tileHeight * 2) + (spacing * 3); // 2 rows + 3 spacings
@@ -1210,81 +1795,41 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                 child: _buildCameraPreview(),
               ),
 
-              // Camera selection dropdown (always show for debugging)
-              if (widget.cameras.isNotEmpty)
-                Positioned(
-                  left: 20,
-                  top: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: DropdownButton<CameraDescription>(
-                      value: _selectedCamera,
-                      dropdownColor: Colors.grey[900],
-                      underline: Container(),
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Colors.white,
-                      ),
-                      items: widget.cameras.map((camera) {
-                        return DropdownMenuItem<CameraDescription>(
-                          value: camera,
-                          child: Row(
-                            children: [
-                              Icon(
-                                _getCameraLensIcon(camera.lensDirection),
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _getCameraDisplayName(camera),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (camera) {
-                        if (camera != null &&
-                            !_isCountdownActive &&
-                            !_isLoading) {
-                          _onCameraSelected(camera);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-
-              // Background removal toggle - Hidden during picture taking, only shown after completion
-              // This toggle will only be visible in the background selection view
-
-              // Debug info panel (can be removed later)
+              // Camera info display (show selected camera)
               Positioned(
                 left: 20,
-                top: 80,
+                top: 20,
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
-                  child: Text(
-                    'Kameras gefunden: ${widget.cameras.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getCameraLensIcon(_selectedCamera!.lensDirection),
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _getCameraDisplayName(_selectedCamera!),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1574,152 +2119,61 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
 
                           const SizedBox(height: 16),
 
-                          // Background removal toggle and view controls
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.1),
-                                width: 1,
+                          // Show original/processed toggle only if background removal is enabled and processed
+                          if (_removeBackground &&
+                              _backgroundRemovedImages.any(
+                                (img) => img != null,
+                              )) ...[
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.1),
+                                  width: 1,
+                                ),
                               ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Background removal toggle
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.auto_fix_high,
-                                      color: _removeBackground
-                                          ? Colors.green
-                                          : Colors.white54,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Hintergrund entfernen',
-                                        style: TextStyle(
-                                          color: _removeBackground
-                                              ? Colors.green
-                                              : Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: _removeBackground
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _showOriginal ? Icons.photo : Icons.layers,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _showOriginal
+                                          ? 'Original Fotos anzeigen'
+                                          : 'Verarbeitete Fotos anzeigen',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    Switch(
-                                      value: _removeBackground,
-                                      onChanged: !_isLoading
-                                          ? (value) =>
-                                                _toggleBackgroundRemoval(value)
-                                          : null,
-                                      activeColor: Colors.green,
-                                      activeTrackColor: Colors.green
-                                          .withOpacity(0.3),
-                                      inactiveThumbColor: Colors.white54,
-                                      inactiveTrackColor: Colors.white
-                                          .withOpacity(0.2),
+                                  ),
+                                  Switch(
+                                    value: _showOriginal,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _showOriginal = value;
+                                      });
+                                    },
+                                    activeColor: Colors.blue,
+                                    activeTrackColor: Colors.blue.withOpacity(
+                                      0.3,
                                     ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 12),
-
-                                // Save mode toggle
-                                Row(
-                                  children: [
-                                    Icon(
-                                      _saveSeparately ? Icons.view_module : Icons.grid_view,
-                                      color: _saveSeparately
-                                          ? Colors.orange
-                                          : Colors.purple,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _saveSeparately ? 'Einzeln speichern' : '4-Kachel Bild',
-                                        style: TextStyle(
-                                          color: _saveSeparately
-                                              ? Colors.orange
-                                              : Colors.purple,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    Switch(
-                                      value: !_saveSeparately,
-                                      onChanged: !_isLoading
-                                          ? (value) {
-                                              setState(() {
-                                                _saveSeparately = !value;
-                                              });
-                                            }
-                                          : null,
-                                      activeColor: Colors.purple,
-                                      activeTrackColor: Colors.purple.withOpacity(0.3),
-                                      inactiveThumbColor: Colors.orange,
-                                      inactiveTrackColor: Colors.orange.withOpacity(0.3),
-                                    ),
-                                  ],
-                                ),
-
-                                // Show original/processed toggle only if background removal is enabled and processed
-                                if (_removeBackground &&
-                                    _backgroundRemovedImages.any(
-                                      (img) => img != null,
-                                    )) ...[
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        _showOriginal
-                                            ? Icons.photo
-                                            : Icons.layers,
-                                        color: Colors.blue,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _showOriginal
-                                              ? 'Original anzeigen'
-                                              : 'Verarbeitet anzeigen',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                      Switch(
-                                        value: _showOriginal,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _showOriginal = value;
-                                          });
-                                        },
-                                        activeColor: Colors.blue,
-                                        activeTrackColor: Colors.blue
-                                            .withOpacity(0.3),
-                                        inactiveThumbColor: Colors.white54,
-                                        inactiveTrackColor: Colors.white
-                                            .withOpacity(0.2),
-                                      ),
-                                    ],
+                                    inactiveThumbColor: Colors.white54,
+                                    inactiveTrackColor: Colors.white
+                                        .withOpacity(0.2),
                                   ),
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
-
-                          const SizedBox(height: 24),
+                            const SizedBox(height: 24),
+                          ],
 
                           // Captured image
                           Expanded(
@@ -2005,58 +2459,6 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                     ),
                                     const SizedBox(height: 16),
                                     
-                                    // Save mode toggle
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.05),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: Colors.white.withOpacity(0.1),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            _saveSeparately ? Icons.view_module : Icons.grid_view,
-                                            color: _saveSeparately
-                                                ? Colors.orange
-                                                : Colors.purple,
-                                            size: 20,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _saveSeparately ? 'Einzeln speichern' : '4-Kachel Bild',
-                                              style: TextStyle(
-                                                color: _saveSeparately
-                                                    ? Colors.orange
-                                                    : Colors.purple,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                          Switch(
-                                            value: !_saveSeparately,
-                                            onChanged: !_isLoading
-                                                ? (value) {
-                                                    setState(() {
-                                                      _saveSeparately = !value;
-                                                    });
-                                                  }
-                                                : null,
-                                            activeColor: Colors.purple,
-                                            activeTrackColor: Colors.purple.withOpacity(0.3),
-                                            inactiveThumbColor: Colors.orange,
-                                            inactiveTrackColor: Colors.orange.withOpacity(0.3),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    
                                     // Preview area
                                     Expanded(
                                       child: _saveSeparately 
@@ -2138,58 +2540,6 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
                                   ),
                                   const SizedBox(height: 16),
                                   
-                                  // Save mode toggle
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.05),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.1),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          _saveSeparately ? Icons.view_module : Icons.grid_view,
-                                          color: _saveSeparately
-                                              ? Colors.orange
-                                              : Colors.purple,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            _saveSeparately ? 'Einzeln speichern' : '4-Kachel Bild',
-                                            style: TextStyle(
-                                              color: _saveSeparately
-                                                  ? Colors.orange
-                                                  : Colors.purple,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Switch(
-                                          value: !_saveSeparately,
-                                          onChanged: !_isLoading
-                                              ? (value) {
-                                                  setState(() {
-                                                    _saveSeparately = !value;
-                                                  });
-                                                }
-                                              : null,
-                                          activeColor: Colors.purple,
-                                          activeTrackColor: Colors.purple.withOpacity(0.3),
-                                          inactiveThumbColor: Colors.orange,
-                                          inactiveTrackColor: Colors.orange.withOpacity(0.3),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  
                                   // Save button
                                   ElevatedButton.icon(
                                     onPressed: _isSaving
@@ -2243,6 +2593,4 @@ class _PhotoBoxScreenState extends State<PhotoBoxScreen>
       },
     );
   }
-
-  // ...rest of existing code...
 }
