@@ -143,24 +143,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Container(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.all(16),
         child: Center(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 800),
+            constraints: const BoxConstraints(maxWidth: 600),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.blue.shade600, Colors.blue.shade800],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.blue.withOpacity(0.3),
@@ -173,34 +173,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Icon(
                         Icons.admin_panel_settings,
-                        size: 60,
+                        size: 28,
                         color: Colors.white,
                       ),
-                      SizedBox(height: 16),
+                      SizedBox(height: 4),
                       Text(
                         'PhotoBox Admin Einstellungen',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 28,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      SizedBox(height: 8),
+                      SizedBox(height: 4),
                       Text(
                         'Konfigurieren Sie die PhotoBox vor dem Start',
-                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
                         textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 12),
 
                 // Settings Card
                 Container(
-                  padding: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.grey[900],
                     borderRadius: BorderRadius.circular(20),
@@ -221,7 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       // Camera Selection
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(12),
@@ -341,11 +341,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
                       // Background Removal Toggle
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(12),
@@ -412,12 +412,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
                       // Background Selection (only show if background removal is enabled)
                       if (_removeBackground) ...[
                         Container(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.05),
                             borderRadius: BorderRadius.circular(12),
@@ -534,12 +534,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                       ],
 
                       // Save Mode Toggle
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(12),
@@ -609,11 +609,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
 
                 // Start Button
                 Container(
-                  height: 70,
+                  height: 48,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.green.shade600, Colors.green.shade800],
@@ -640,7 +640,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           children: [
                             Icon(
                               Icons.play_arrow,
-                              size: 32,
+                              size: 24,
                               color: Colors.white,
                             ),
                             SizedBox(width: 12),
@@ -648,7 +648,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               'PhotoBox starten',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
